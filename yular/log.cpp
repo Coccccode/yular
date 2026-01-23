@@ -24,27 +24,16 @@
 
     }
     Logger::Logger(const std::string& name)
-        : m_name(name) {
-
+        : m_name(name)
+        , m_level(LogLevel::DEBUG) {
+            m_formatter.rest
     }
-    void Logger::log(LogLevel::Level level,LogEvent::ptr event) {
-        if(level >= m_level) {
+    void Logger::log(LogEvent::ptr event) {
+        if(event->getLevel() >= m_level) {
             for(auto& appender : m_appenders) {
-                appender->log(level, event);
+                appender->log(event);
             }
         }
-    }
-    void Logger::debug(LogEvent::ptr event) {
-        log(LogLevel::Level::DEBUG,event);
-    }
-    void Logger::info(LogEvent::ptr event) {
-        log(LogLevel::Level::INFO,event);
-    }
-    void Logger::warn(LogEvent::ptr event) {
-        log(LogLevel::Level::WARN,event);
-    }
-    void Logger::fatal(LogEvent::ptr event) {
-        log(LogLevel::Level::FATAL,event);
     }
     void Logger::addAppender(LogAppender::ptr appender) {
         m_appenders.push_back(appender);
@@ -59,9 +48,9 @@
     } 
 
 
-    void FileLogAppender::log(LogLevel::Level level,LogEvent::ptr event)
+    void FileLogAppender::log(LogEvent::ptr event)
     {
-        if(level >= m_level)
+        if(event->getLevel() >= m_level)
         {
             m_filestream << m_formatter->format(event);
         }
@@ -76,9 +65,9 @@
         return !!m_filestream;
     }
 
-    void StdoutLogAppender::log(LogLevel::Level level,LogEvent::ptr event)
+    void StdoutLogAppender::log(LogEvent::ptr event)
     {
-        if(level >= m_level)
+        if(event->getLevel() >= m_level)
         {
             std::cout << m_formatter->format(event);
         }
@@ -209,30 +198,30 @@
         }
         return ss.str();
     }
+    LogEventWrap::LogEventWrap(Logger::ptr logger, LogEvent::ptr e)
+        : m_logger(logger), m_event(e) {
+    }
+
+    LogEventWrap::~LogEventWrap() { 
+        m_logger->log(m_event); 
+    }
+
+    std::stringstream &LogEventWrap::getSS() { return m_event->getSS(); }
 
 int main(int argc,char** argv) 
 {
-
-
- Logger::ptr lg(new Logger("XYZ"));
-  LogEvent::ptr event(new LogEvent(lg->getName(),
-	                      LogLevel::INFO,      //日志级别
-	                       __FILE__,            //文件名称
-	                       __LINE__,            //行号
-	                       1234567,             //运行时间
-	                       std::hash<std::thread::id>()(std::this_thread::get_id()), //线程ID
-	                       0,                   //协程ID
-	                       time(0)              //当前时间
-	                       ));
-
+  std::cout << "======START======" << std::endl;
+  Logger::ptr lg(new Logger("XYZ"));
   LogFormatter::ptr formatter(new LogFormatter(
       "%d{%Y-%m-%d %H:%M:%S}%T%t%T%F%T[%p]%T[%c]%T%f:%l%T%m%n"));
   //添加控制台输出适配器
   StdoutLogAppender::ptr stdApd(new StdoutLogAppender());
   stdApd->setFormatter(formatter);
   lg->addAppender(stdApd);
-  lg->log(LogLevel::Level::INFO,event);
-  return 0;
+  LOG_LEVEL(lg,LogLevel::INFO) << "Hello XYZ !";
+  std::cout << "=======END=======" << std::endl;
+    
+    return 0;
 
 }
 

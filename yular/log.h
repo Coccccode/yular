@@ -16,7 +16,13 @@
 #include <functional>
 #include <unistd.h>
 #include <thread>
-//日志级别
+//日志级别、
+#define LOG_LEVEL(logger, level)                                               \
+  		if (logger->getLevel() <= level)                                       \
+ 			 LogEventWrap(logger, LogEvent::ptr(new LogEvent(                  \
+                           logger->getName(), level, __FILE__, __LINE__, 0,    \
+                           std::hash<std::thread::id>()(std::this_thread::get_id()), 1, time(0))))                  \
+      					   .getSS()
 class LogLevel
 {
 public:
@@ -43,6 +49,8 @@ public:
              uint32_t thread_id,
              uint32_t fiber_id,
              uint64_t time);
+
+    const std::string& getLogName() const { return m_logName;}
     const char* getFile() const { return m_file;}
     int32_t getLine() const { return m_line;}
     uint32_t getElapse() const { return m_elapse;}
@@ -51,8 +59,10 @@ public:
     uint64_t getTime() const { return m_time;}
     LogLevel::Level getLevel() const { return m_level;}
 
-    const std::string& getLogName() const { return m_logName;}
+    std::string getContent() const { return m_ss.str(); } //【此处增加流对象转字符串！！！】
+    std::stringstream& getSS() { return m_ss;}	//【此处增加流对象get方法提供流式调用！！！】
 private:
+    std::string m_logName; //日志名称
     const char* m_file = nullptr; //文件名
     LogLevel::Level m_level; //日志级别
     int32_t m_line = 0; //行号
@@ -60,7 +70,7 @@ private:
     uint32_t m_thread_id = 0; //线程id
     uint32_t m_fiber_id = 0; //协程id
     uint64_t m_time; //时间戳 
-    std::string m_logName; //日志名称
+    std::stringstream m_ss;       //字符流【此处增加流对象！！！】
 };
 //日志格式化器
 class LogFormatter {
@@ -109,7 +119,7 @@ class LogAppender {
 public:
     typedef std::shared_ptr<LogAppender> ptr;
     virtual ~LogAppender() {}
-    virtual void log(LogLevel::Level level, LogEvent::ptr event) = 0;
+    virtual void log(LogEvent::ptr event) = 0;
     
     void setFormatter(LogFormatter::ptr val) { m_formatter = val;}
     LogFormatter::ptr getFormatter() const { return m_formatter;}
@@ -124,7 +134,7 @@ public:
     typedef std::shared_ptr<Logger> ptr;
     
     Logger(const std::string& name  = "root");
-    void log(LogLevel::Level level, LogEvent::ptr event);
+    void log(LogEvent::ptr event);
     void debug(LogEvent::ptr event);
     void info(LogEvent::ptr event);
     void warn(LogEvent::ptr event);
@@ -146,14 +156,14 @@ class StdoutLogAppender : public LogAppender {
 public:
     typedef std::shared_ptr<StdoutLogAppender> ptr;
     StdoutLogAppender() {}
-    void log(LogLevel::Level level, LogEvent::ptr event) override;
+    void log(LogEvent::ptr event) override;
 private:
 };
 //输出到文件的appender
 class FileLogAppender : public LogAppender {
 public:
     typedef std::shared_ptr<FileLogAppender> ptr;
-    void log(LogLevel::Level level,LogEvent::ptr event) override;
+    void log(LogEvent::ptr event) override;
     bool reopen();
 private:
     std::string m_filename;
@@ -164,7 +174,7 @@ class MessageFormatItem:public LogFormatter::FormatItem {
 public:
     MessageFormatItem(const std::string str = "") {};
     void format(std::ostream& os,LogEvent::ptr event) {
-        os << "Message";
+        os << event->getContent();
     }
 };
 
@@ -274,5 +284,17 @@ private:
     std::string m_string;
 };
 
+class LogEventWrap
+{
+public:
+    LogEventWrap(Logger::ptr logger,LogEvent::ptr e);
+    ~LogEventWrap();
+    LogEvent::ptr getEvent() const { return m_event; }
+    std::stringstream &getSS();
+
+private:
+  Logger::ptr m_logger;
+  LogEvent::ptr m_event;
+};
 
 #endif
